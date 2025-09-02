@@ -17,11 +17,16 @@ rho = cell2mat(materials(8));
 % 几何参数
 ori = [0,0,0];
 a = 1; b = 1; c = 1;
+kappa_bar_sq=1;
+% 无量纲化
+% [c_LN, e_LN, epcl_LN, L_bar, L0, vs, Phi0, kappa_bar_sq] = ...
+%          piezo_dimensionless(c_LN, e_LN, epcl_LN, rho, a, b, c); rho=1;
+% 离散
 type="quadratic";
-N = 16;
+N = 8;
 Nx=N+1;Ny=N+1;Nz=N+1;
 [K,M,~,Dof_Index] =...
-    AssemblePiezMatFEM(c_LN,e_LN,epcl_LN,rho,...
+    AssemblePiezMatFEM(c_LN,e_LN,epcl_LN,rho,kappa_bar_sq,...
     ori,a,b,c,Nx,Ny,Nz,...
     [],[],[],type);
 % 处理Dirichlete边界条件
@@ -51,6 +56,7 @@ if equ_type == "saddle"
 % 直接计算鞍点系统
 [V_saddle,lambda_saddle]=eigs(K,M,10,'sm');
 %[lambda_saddle_GPT,V_saddle_GPT]=inverse_iteration_GPT(K, M, 0,1E-10,1000);
+% [lambda_saddle, V_saddle, phi] = piezo_restore_dimension(lambda_saddle, V_saddle, L0, vs, Phi0);
 elseif equ_type == "schur"
 % 计算Schur补系统
 index_Pot = Dof_Index(:,1)==4;
@@ -59,6 +65,7 @@ S = K(index_Pot,index_Pot)\K(index_Pot,index_disp);
 S = K(index_disp,index_disp)-K(index_disp,index_Pot)*S;
 M_S = M(index_disp,index_disp);
 [V_schur,lambda_schur]=eigs(S,M_S,10,'sm');
+[lambda_schur, V_schur, phi] = piezo_restore_dimension(lambda_schur, V_schur, L0, vs, Phi0);
 end
 
 
