@@ -1,0 +1,55 @@
+% 有界域问题
+clear
+% clc
+currentPath = 'D:\Code\M\Mortar_FEM_Wavelet';
+addpath(genpath(currentPath));
+% 材料参数
+ModelCoeff = 'D:\Code\M\Mortar_FEM_Wavelet\Piezoelectric\Data\ModelCoef2.mat';
+load(ModelCoeff)
+% omega = 4.39822971502571*1e9;
+omega = 1.9*1e9;
+c_LN = cell2mat(materials(2));
+lamda_Al = cell2mat(materials(3));
+mu_Al = cell2mat(materials(4));
+e_LN = cell2mat(materials(5));
+epcl_LN = cell2mat(materials(7))*cell2mat(materials(6));
+density_LN = cell2mat(materials(8));
+density_Al = cell2mat(materials(9));
+% 级联参数
+N_HCT=5;
+N_IDT=2^N_HCT;
+% 几何参数
+ori1 = cell2mat(Geo(1));a1 = cell2mat(Geo(2));b1 = cell2mat(Geo(3));c1 = cell2mat(Geo(4));
+ori2 = cell2mat(Geo(5));a2 = cell2mat(Geo(6));b2 = cell2mat(Geo(7));c2 = cell2mat(Geo(8));
+interval_sub = [ori1.',ori1.'+[a1;b1;c1]];
+interval_ele = [ori2.',ori2.'+[a2;b2;c2]];
+% 网格参数
+Nx1 = 17; Ny1 = 2; Nz1 = 17;
+Nx2 = 9; Nz2 = 5;
+type="quadratic";
+% 组装单根IDT刚度矩阵
+[K_IDT,M_IDT,Dof_Index_IDT,~,~,~,xStep_sub,yStep_sub,zStep_sub] = AssembleSAWMatFEM(c_LN,e_LN,epcl_LN,density_LN,...
+    lamda_Al,mu_Al,density_Al,...
+    ori1,a1,b1,c1,Nx1,Ny1,Nz1,...
+    ori2,a2,b2,c2,Nx2,Nz2,true,type);
+K_IDT=K_IDT-omega^2*M_IDT;
+% 处理边界条件
+%  IDT
+bottom=abs(Dof_Index_IDT(:,4)-interval_sub(3,1))/a1<1e-10;
+K_IDT(bottom,:)=[];
+K_IDT(:,bottom)=[];
+Dof_Index_IDT(bottom,:)=[];
+% 计算schur补
+[K_IDT,Dof_Index_IDT] = IDT_Schur(K_IDT,Dof_Index_IDT,interval_sub,interval_ele,true);
+% HCT
+[K_IDT,Dof_Index_IDT] = IDT_HCT(K_IDT,Dof_Index_IDT,N_HCT);
+% 计算表面电荷
+V=1;
+index_L=Dof_Index_IDT(:,1)==-1;
+index_R=Dof_Index_IDT(:,1)==-2;
+index_b=index_L|index_R;
+index_e = Dof_Index_IDT(:,1)>0;
+Q=(K_IDT(index_e,index_b)*(K_IDT(index_b,index_b)\sum(K_IDT(index_b,index_e),2)*V)-...
+    sum(K_IDT(index_e,index_e),2)*V);
+Q=sum(Q);
+I=omega*Q*400;
