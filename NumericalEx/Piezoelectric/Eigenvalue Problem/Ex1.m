@@ -5,7 +5,7 @@ addpath(genpath(currentPath));
 % 材料参数
 ModelCoeff = 'D:\Code\M\Mortar_FEM_Wavelet\Piezoelectric\Data\ModelCoef2.mat';
 %% 数值求解
-equ_type = "schur";
+equ_type = "saddle";
 % 导入材料参数
 load(ModelCoeff)
 c_LN = cell2mat(materials(2));
@@ -19,11 +19,11 @@ ori = [0,0,0];
 a = 1; b = 1; c = 1;
 kappa_bar_sq=1;
 % 无量纲化
-% [c_LN, e_LN, epcl_LN, L_bar, L0, vs, Phi0, kappa_bar_sq] = ...
-%          piezo_dimensionless(c_LN, e_LN, epcl_LN, rho, a, b, c); rho=1;
+[c_LN, e_LN, epcl_LN, L_bar, L0, vs, Phi0, kappa_bar_sq] = ...
+         piezo_dimensionless(c_LN, e_LN, epcl_LN, rho, a, b, c); rho=1;
 % 离散
 type="quadratic";
-N = 8;
+N = 16;
 Nx=N+1;Ny=N+1;Nz=N+1;
 [K,M,~,Dof_Index] =...
     AssemblePiezMatFEM(c_LN,e_LN,epcl_LN,rho,kappa_bar_sq,...
@@ -54,9 +54,9 @@ Dof_Index([boundary_u;boundary_v;boundary_w;boundary_phi],:)=[];
 %% 计算特征值
 if equ_type == "saddle"
 % 直接计算鞍点系统
-[V_saddle,lambda_saddle]=eigs(K,M,10,'sm');
-%[lambda_saddle_GPT,V_saddle_GPT]=inverse_iteration_GPT(K, M, 0,1E-10,1000);
-% [lambda_saddle, V_saddle, phi] = piezo_restore_dimension(lambda_saddle, V_saddle, L0, vs, Phi0);
+% [V_saddle,lambda_saddle]=eigs(K,M,10,'sm');
+[lambda_saddle,V_saddle]=inverse_iteration_GPT(K, M, 0,1E-10,1000);
+[lambda_saddle, V_saddle, phi] = piezo_restore_dimension(lambda_saddle, V_saddle, L0, vs, Phi0);
 elseif equ_type == "schur"
 % 计算Schur补系统
 index_Pot = Dof_Index(:,1)==4;
@@ -115,7 +115,7 @@ function [lambda, v] = inverse_iteration_GPT(A, B, sigma, tol, maxit)
 
         % 4) 收敛判据
         res = norm(A*v - lambda*B*v);
-        if res < tol || abs(lambda - lambda_old) < tol*(1+abs(lambda))
+        if res < tol %|| abs(lambda - lambda_old) < tol*(1+abs(lambda))
             fprintf('Converged in %d iterations, residual = %.2e\n', k, res);
             return;
         end
