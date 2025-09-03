@@ -5,7 +5,8 @@ addpath(genpath(currentPath));
 % 材料参数
 ModelCoeff = 'D:\Code\M\Mortar_FEM_Wavelet\Piezoelectric\Data\ModelCoef2.mat';
 %% 数值求解
-equ_type = "saddle";
+% equ_type = "saddle";
+equ_type = "schur";
 % 导入材料参数
 load(ModelCoeff)
 c_LN = cell2mat(materials(2));
@@ -23,7 +24,7 @@ kappa_bar_sq=1;
          piezo_dimensionless(c_LN, e_LN, epcl_LN, rho, a, b, c); rho=1;
 % 离散
 type="quadratic";
-N = 16;
+N = 8;
 Nx=N+1;Ny=N+1;Nz=N+1;
 [K,M,~,Dof_Index] =...
     AssemblePiezMatFEM(c_LN,e_LN,epcl_LN,rho,kappa_bar_sq,...
