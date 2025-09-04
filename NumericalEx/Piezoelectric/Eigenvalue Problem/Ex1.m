@@ -5,8 +5,8 @@ addpath(genpath(currentPath));
 % 材料参数
 ModelCoeff = 'D:\Code\M\Mortar_FEM_Wavelet\Piezoelectric\Data\ModelCoef2.mat';
 %% 数值求解
-equ_type = "saddle";
-% equ_type = "schur";
+% equ_type = "saddle";
+equ_type = "schur";
 % 导入材料参数
 load(ModelCoeff)
 c_LN = cell2mat(materials(2));
@@ -68,8 +68,11 @@ index_disp = ~index_Pot;
 S = K(index_Pot,index_Pot)\K(index_Pot,index_disp);
 S = K(index_disp,index_disp)-K(index_disp,index_Pot)*S;
 M_S = M(index_disp,index_disp);
-[V_schur,lambda_schur]=eigs(S,M_S,10,'sm');
-[lambda_schur, V_schur, phi] = piezo_restore_dimension(lambda_schur, V_schur, L0, vs, Phi0);
+[V_saddle_eigs,lambda_saddle_eigs]=eigs(S,M_S,1,'sm');
+[lambda_saddle,V_saddle,u]=JD_iteration(S,M_S,1E-10,1000);
+[lambda_saddle,~, ~] = piezo_restore_dimension(lambda_saddle,ones(size(K,1),1), L0, vs, Phi0);
+[lambda_saddle_eigs, ~, ~] = piezo_restore_dimension(lambda_saddle_eigs,ones(size(K,1),1), L0, vs, Phi0);
+rel_err=abs(lambda_saddle-lambda_saddle_eigs)/abs(lambda_saddle_eigs)
 end
 
 
@@ -129,21 +132,16 @@ function [lambda, v] = inverse_iteration_GPT(A, B, sigma, tol, maxit)
     warning('未收敛，最大迭代数 = %d, 最后残差 = %.2e', maxit, res);
 end
 
-function [lambda,v,u]=JD_iteration(A, B, tol, maxit)
+function [lambda,v,u]=JD_iteration(A, B,  tol, maxit)
 if nargin < 4, maxit = 200; end
 if nargin < 3, tol = 1e-10; end
 n = size(A,1);
+
 % 初始向量
 % u = randn(n,1);
-load('D:\Code\M\Mortar_FEM_Wavelet\NumericalEx\Piezoelectric\Eigenvalue Problem\Data\initValueJD.mat');
-u=u(:,1);
-nu=length(u);
-if n>nu
-    u=[u;zeros(n-nu,1)];
-else
-    u=u(1:n);
-end
-u = u / norm(u);
+u=ones(n,1);
+u = u / sqrt(u'*B*u);  % B-归一化
+% u = u / sqrt(u'*u);
 lambda_old = inf;
 for k=1:maxit
     % 计算矩阵投影
@@ -151,8 +149,8 @@ for k=1:maxit
     HB=u'*B*u;
     %计算小规模特征值问题
     [y,theta]=eig(HA,HB,'vector');
-    [~, idx] = min(abs(theta)); % 以最小模特征值为例
-    theta = theta(idx); % 当前近似特征值
+    [~, idx] = min((theta)); % 最小特征值
+    theta = theta(idx);        % 当前近似特征值
     y = y(:, idx);
     y=u*y; % Ritz投影
     r=A*y-theta*B*y;
@@ -164,41 +162,16 @@ for k=1:maxit
         return
     end
     lambda_old = theta;
-    P=((y*y'))/(y'*y);
+    P=((y*y'*B))/(y'*B*y);
     P = eye(size(P,1))-P;
     Atheta=A-theta*B;
     Atheta=P'*Atheta*P;
     t=Atheta\(-r);
-    t=t-(t'*y)/norm(y)*y;
-    % 施密特正交化
+    % t=t-(t'*B*y)/sqrt(y'*B*y)*y;
     for i = 1:size(u,2)
-        t = t-(t'*u(:,i))/norm(u(:,i))*u(:,i);
+        t = t-(t'*B*u(:,i))/sqrt(u(:,i)'*B*u(:,i))*u(:,i);
     end
-    t = t/norm(t);
+    t = t/sqrt((t'*B*t));
     u=[u,t];
 end
 end
-% function t = solveWithGMRES(Atheta, r)
-% 简洁版 GMRES 预条件迭代求解器
-% 输入: 
-%   Atheta - 系数矩阵 (非对称)
-%   r - 右侧向量
-% 输出:
-%   t - 解向量
-% 
-% 设置默认迭代参数
-% restart = 30;       % Krylov 子空间大小
-% tol = 1e-6;         % 收敛容差
-% maxit = 100;         % 最大迭代次数
-% 
-% 尝试构建 ILU(0) 预条件子
-% try
-%     setup.type = 'nofill';      % ILU(0) 无填充
-%     [L, U] = ilu(Atheta, setup);
-%     M = @(x) U\(L\x);           % 预条件函数句柄
-%     [t, ~] = gmres(Atheta, -r, restart, tol, maxit, M);
-% catch
-%     ILU 失败时使用无预条件 GMRES
-%     [t, ~] = gmres(Atheta, -r, restart, tol, maxit);
-% end
-% end
