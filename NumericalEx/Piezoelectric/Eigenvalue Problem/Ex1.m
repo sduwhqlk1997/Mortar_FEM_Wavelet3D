@@ -24,7 +24,7 @@ kappa_bar_sq=1;
          piezo_dimensionless(c_LN, e_LN, epcl_LN, rho, a, b, c); rho=1;
 % 离散
 type="quadratic";
-N = 4;
+N = 8;
 Nx=N+1;Ny=N+1;Nz=N+1;
 [K,M,~,Dof_Index] =...
     AssemblePiezMatFEM(c_LN,e_LN,epcl_LN,rho,kappa_bar_sq,...
@@ -55,11 +55,12 @@ Dof_Index([boundary_u;boundary_v;boundary_w;boundary_phi],:)=[];
 %% 计算特征值
 if equ_type == "saddle"
 % 直接计算鞍点系统
-% [V_saddle,lambda_saddle]=eigs(K,M,10,'sm');
+[V_saddle_eigs,lambda_saddle_eigs]=eigs(K,M,1,'sm');
 % [lambda_saddle,V_saddle]=inverse_iteration_GPT(K, M, 0,1E-10,1000);
-% [lambda_saddle,V_saddle]=JD_iteration(K,M,1E-10,1000);
-[lambda_saddle,V_saddle]=jacobi_davidson_simple(K, M);
-[lambda_saddle, V_saddle, phi] = piezo_restore_dimension(lambda_saddle, V_saddle, L0, vs, Phi0);
+[lambda_saddle,V_saddle,u]=JD_iteration(K,M,1E-10,1000);
+[lambda_saddle_eigs, ~, ~] = piezo_restore_dimension(lambda_saddle_eigs, V_saddle_eigs, L0, vs, Phi0);
+[lambda_saddle, ~, ~] = piezo_restore_dimension(lambda_saddle, V_saddle, L0, vs, Phi0);
+rel_err=abs(lambda_saddle-lambda_saddle_eigs)/abs(lambda_saddle_eigs)
 elseif equ_type == "schur"
 % 计算Schur补系统
 index_Pot = Dof_Index(:,1)==4;
@@ -128,22 +129,31 @@ function [lambda, v] = inverse_iteration_GPT(A, B, sigma, tol, maxit)
     warning('未收敛，最大迭代数 = %d, 最后残差 = %.2e', maxit, res);
 end
 
-function [lambda,v]=JD_iteration(A, B,  tol, maxit)
+function [lambda,v,u]=JD_iteration(A, B, tol, maxit)
 if nargin < 4, maxit = 200; end
 if nargin < 3, tol = 1e-10; end
 n = size(A,1);
-
 % 初始向量
-u = randn(n,1);
-u = u / sqrt(u'*B*u);  % B-归一化
-% v = v / sqrt(v'*v);
+% u = randn(n,1);
+load('D:\Code\M\Mortar_FEM_Wavelet\NumericalEx\Piezoelectric\Eigenvalue Problem\Data\initValueJD.mat');
+u=u(:,1);
+nu=length(u);
+if n>nu
+    u=[u;zeros(n-nu,1)];
+else
+    u=u(1:n);
+end
+u = u / norm(u);
 lambda_old = inf;
 for k=1:maxit
     % 计算矩阵投影
     HA=u'*A*u;
     HB=u'*B*u;
     %计算小规模特征值问题
-    [y,theta]=eigs(HA,HB,1,'sa');
+    [y,theta]=eig(HA,HB,'vector');
+    [~, idx] = min(abs(theta)); % 以最小模特征值为例
+    theta = theta(idx); % 当前近似特征值
+    y = y(:, idx);
     y=u*y; % Ritz投影
     r=A*y-theta*B*y;
     res = norm(r);
@@ -157,64 +167,38 @@ for k=1:maxit
     P=((y*y'))/(y'*y);
     P = eye(size(P,1))-P;
     Atheta=A-theta*B;
-    Atheta=P*Atheta*P';
+    Atheta=P'*Atheta*P;
     t=Atheta\(-r);
-    t=t-(y'*B*t)/(y'*B*y)*y;
+    t=t-(t'*y)/norm(y)*y;
+    % 施密特正交化
     for i = 1:size(u,2)
-        t = t-(u(:,i)'*B*t)/(u(:,i)'*B*u(:,i))*u(:,i);
+        t = t-(t'*u(:,i))/norm(u(:,i))*u(:,i);
     end
-    t = t/(t'*B*t);
+    t = t/norm(t);
     u=[u,t];
 end
 end
-
-function [lambda, x] = jacobi_davidson_simple(A, B)
-    % 参数设置：收敛阈值和最大迭代步数 (论文未提供具体值，设为默认)
-    tol = 1e-6;        % 残差收敛阈值
-    maxiter = 100;     % 最大迭代次数
-    
-    n = size(A, 1);    % 问题维度
-    % 随机初始化起始向量 (正交化确保稳定性)
-    v = randn(n, 1);
-    v = v / norm(v);
-    V = v;            % 初始化搜索子空间
-    
-    % 迭代求解
-    for iter = 1:maxiter
-        % 在子空间上投影形成矩阵 W_A = V'*A*V, W_B = V'*B*V
-        W_A = V' * A * V;
-        W_B = V' * B * V;
-        
-        % 求解小型广义特征值问题 [W_A y = lambda W_B y]（参考 <sup custom='true' origin='1' new='1' >1</sup>）
-        [eigenvecs, eigenvals] = eig(W_A, W_B, 'vector');
-        [~, idx] = min(abs(eigenvals)); % 以最小模特征值为例
-        lambda = eigenvals(idx);        % 当前近似特征值
-        y = eigenvecs(:, idx);          % 子空间特征向量
-        u = V * y;                      % 全局近似特征向量
-        
-        % 计算残差 r = (A - lambda B)u
-        r = A * u - lambda * B * u;
-        res_norm = norm(r);
-        fprintf('迭代 %d: 残差范数 = %.4e\n', iter, res_norm);
-        
-        % 检查收敛
-        if res_norm < tol
-            x = u;
-            fprintf('收敛成功！最终残差范数 = %.4e\n', res_norm);
-            return;
-        end
-        
-        % 求解校正方程 (I - uu^T)(A - lambda B)(I - uu^T) z = -r（<sup custom='true' origin='1' new='1' >1</sup>）
-        % 简化处理：使用伪逆避免逆操作
-        P = eye(n) - u * u';
-        T = P * (A - lambda * B) * P;
-        z = T \ (-r); % 直接求解（用户要求无预条件）
-        z = z - u * (u' * z); % 正交化
-        
-        % 添加校正向量到搜索子空间
-        V = [V, z]; % 扩展子空间
-    end
-    
-    x = u; % 返回最终近似
-    warning('未收敛：达到最大迭代');
-end
+% function t = solveWithGMRES(Atheta, r)
+% 简洁版 GMRES 预条件迭代求解器
+% 输入: 
+%   Atheta - 系数矩阵 (非对称)
+%   r - 右侧向量
+% 输出:
+%   t - 解向量
+% 
+% 设置默认迭代参数
+% restart = 30;       % Krylov 子空间大小
+% tol = 1e-6;         % 收敛容差
+% maxit = 100;         % 最大迭代次数
+% 
+% 尝试构建 ILU(0) 预条件子
+% try
+%     setup.type = 'nofill';      % ILU(0) 无填充
+%     [L, U] = ilu(Atheta, setup);
+%     M = @(x) U\(L\x);           % 预条件函数句柄
+%     [t, ~] = gmres(Atheta, -r, restart, tol, maxit, M);
+% catch
+%     ILU 失败时使用无预条件 GMRES
+%     [t, ~] = gmres(Atheta, -r, restart, tol, maxit);
+% end
+% end
