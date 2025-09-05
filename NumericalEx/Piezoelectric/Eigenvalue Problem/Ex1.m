@@ -5,8 +5,15 @@ addpath(genpath(currentPath));
 % 材料参数
 ModelCoeff = 'D:\Code\M\Mortar_FEM_Wavelet\Piezoelectric\Data\ModelCoef2.mat';
 %% 数值求解
+% 求解的方程形式
 % equ_type = "saddle";
 equ_type = "schur";
+% 使用的数值方法
+% method_type="power";
+method_type="J-D";
+% 无量纲化？
+dimensionless=true;
+
 % 导入材料参数
 load(ModelCoeff)
 c_LN = cell2mat(materials(2));
@@ -20,11 +27,13 @@ ori = [0,0,0];
 a = 1; b = 1; c = 1;
 kappa_bar_sq=1;
 % 无量纲化
+if dimensionless==true
 [c_LN, e_LN, epcl_LN, L_bar, L0, vs, Phi0, kappa_bar_sq] = ...
          piezo_dimensionless(c_LN, e_LN, epcl_LN, rho, a, b, c); rho=1;
+end
 % 离散
 type="quadratic";
-N = 8;
+N = 4;
 Nx=N+1;Ny=N+1;Nz=N+1;
 [K,M,~,Dof_Index] =...
     AssemblePiezMatFEM(c_LN,e_LN,epcl_LN,rho,kappa_bar_sq,...
@@ -56,10 +65,15 @@ Dof_Index([boundary_u;boundary_v;boundary_w;boundary_phi],:)=[];
 if equ_type == "saddle"
 % 直接计算鞍点系统
 [V_saddle_eigs,lambda_saddle_eigs]=eigs(K,M,1,'sm');
-% [lambda_saddle,V_saddle]=inverse_iteration_GPT(K, M, 0,1E-10,1000);
+if method_type == "power"
+[lambda_saddle,V_saddle]=inverse_iteration_GPT(K, M, 0,1E-10,1000);
+elseif method_type =="J-D"
 [lambda_saddle,V_saddle,u]=JD_iteration(K,M,1E-10,1000);
-[lambda_saddle_eigs, ~, ~] = piezo_restore_dimension(lambda_saddle_eigs, V_saddle_eigs, L0, vs, Phi0);
-[lambda_saddle, ~, ~] = piezo_restore_dimension(lambda_saddle, V_saddle, L0, vs, Phi0);
+end
+if dimensionless == true
+    [lambda_saddle_eigs, ~, ~] = piezo_restore_dimension(lambda_saddle_eigs, V_saddle_eigs, L0, vs, Phi0);
+    [lambda_saddle, ~, ~] = piezo_restore_dimension(lambda_saddle, V_saddle, L0, vs, Phi0);
+end
 rel_err=abs(lambda_saddle-lambda_saddle_eigs)/abs(lambda_saddle_eigs)
 elseif equ_type == "schur"
 % 计算Schur补系统
@@ -69,9 +83,14 @@ S = K(index_Pot,index_Pot)\K(index_Pot,index_disp);
 S = K(index_disp,index_disp)-K(index_disp,index_Pot)*S;
 M_S = M(index_disp,index_disp);
 [V_saddle_eigs,lambda_saddle_eigs]=eigs(S,M_S,1,'sm');
-[lambda_saddle,V_saddle,u]=JD_iteration(S,M_S,1E-10,1000);
-[lambda_saddle,~, ~] = piezo_restore_dimension(lambda_saddle,ones(size(K,1),1), L0, vs, Phi0);
-[lambda_saddle_eigs, ~, ~] = piezo_restore_dimension(lambda_saddle_eigs,ones(size(K,1),1), L0, vs, Phi0);
+if method_type == "power"
+elseif method_type =="J-D"
+    [lambda_saddle,V_saddle,u]=JD_iteration(S,M_S,1E-10,1000);
+end
+if dimensionless == true
+    [lambda_saddle,~, ~] = piezo_restore_dimension(lambda_saddle,ones(size(K,1),1), L0, vs, Phi0);
+    [lambda_saddle_eigs, ~, ~] = piezo_restore_dimension(lambda_saddle_eigs,ones(size(K,1),1), L0, vs, Phi0);
+end
 rel_err=abs(lambda_saddle-lambda_saddle_eigs)/abs(lambda_saddle_eigs)
 end
 
@@ -138,8 +157,8 @@ if nargin < 3, tol = 1e-10; end
 n = size(A,1);
 
 % 初始向量
-% u = randn(n,1);
-u=ones(n,1);
+u = randn(n,1);
+% u=ones(n,1);
 u = u / sqrt(u'*B*u);  % B-归一化
 % u = u / sqrt(u'*u);
 lambda_old = inf;
