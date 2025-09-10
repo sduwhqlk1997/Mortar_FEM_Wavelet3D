@@ -33,7 +33,7 @@ if dimensionless==true
 end
 % 离散
 type="quadratic";
-N = 8;
+N = 2;
 Nx=N+1;Ny=N+1;Nz=N+1;
 [K,M,~,Dof_Index] =...
     AssemblePiezMatFEM(c_LN,e_LN,epcl_LN,rho,kappa_bar_sq,...
@@ -155,6 +155,7 @@ function [lambda,vec]=JD_iteration_Gen(A,PA,B,tol, maxit)
 if ~exist('PA','var')||isempty(PA), PA=A; end
 n = size(A,1);
 v = randn(n,1);
+v = ones(n,1);
 v = v/norm(v);
 w=A*v;
 w_tilde=B*v;
@@ -164,7 +165,10 @@ u=v; theta = vAv/vBv;
 % r = w-theta*w_tilde;
 for k=1:maxit
     M = PA-theta*B;
+    % M = spdiags(diag(M), 0, size(M,1), size(M,2));
+    % PM=ilu(M);
     Mu=B*u; Mu = M\Mu;
+    % Mu=gmres(M,Mu,[],1e-4,30,PM);
     epcl=(u'*u)/(u'*Mu);
     t=-u+epcl*Mu;
     t = modifiedGramSchmidt(t, v);
