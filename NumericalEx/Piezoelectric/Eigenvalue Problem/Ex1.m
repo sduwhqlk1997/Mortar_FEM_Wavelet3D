@@ -1,19 +1,21 @@
 clear
 % clc
-currentPath = 'D:\Code\M\Mortar_FEM_Wavelet';
+% currentPath = 'D:\Code\M\Mortar_FEM_Wavelet';
+currentPath = 'D:\code\Mortar_FEM_Wavelet3D';
 addpath(genpath(currentPath));
 % 材料参数
-ModelCoeff = 'D:\Code\M\Mortar_FEM_Wavelet\Piezoelectric\Data\ModelCoef2.mat';
+% ModelCoeff = 'D:\Code\M\Mortar_FEM_Wavelet\Piezoelectric\Data\ModelCoef2.mat';
+ModelCoeff = 'ModelCoef2.mat';
 %% 数值求解
 % 求解的方程形式
 equ_type = "saddle";
 % equ_type = "schur";
 % 使用的数值方法
-% method_type="power";
-method_type="J-D";
+method_type="power";
+% method_type="J-D";
 % 无量纲化？
 dimensionless=true;
-
+% dimensionless=false;
 % 导入材料参数
 load(ModelCoeff)
 c_LN = cell2mat(materials(2));
@@ -117,7 +119,8 @@ function [lambda, v] = inverse_iteration_GPT(A, B, sigma, tol, maxit)
     n = size(A,1);
 
     % 初始向量
-    v = randn(n,1);
+    % v = randn(n,1);
+    v=ones(n,1);
     v = v / sqrt(v'*B*v);  % B-归一化
     % v = v / sqrt(v'*v);
 
@@ -142,7 +145,7 @@ function [lambda, v] = inverse_iteration_GPT(A, B, sigma, tol, maxit)
         % 4) 收敛判据
         res = norm(A*v - lambda*B*v);
         if res < tol || abs(lambda - lambda_old) < tol*(1+abs(lambda))
-            fprintf('Converged in %d iterations, residual = %.2e\n', k, res);
+            fprintf('Converged in %d iterations,\n residual = %.2e\n, distance between two adjoint step is %.2e', k, res,abs(lambda - lambda_old)/(1+abs(lambda)));
             return;
         end
         lambda_old = lambda;
@@ -154,7 +157,7 @@ end
 function [lambda,vec]=JD_iteration_Gen(A,PA,B,tol, maxit)
 if ~exist('PA','var')||isempty(PA), PA=A; end
 n = size(A,1);
-v = randn(n,1);
+% v = randn(n,1);
 v = ones(n,1);
 v = v/norm(v);
 w=A*v;

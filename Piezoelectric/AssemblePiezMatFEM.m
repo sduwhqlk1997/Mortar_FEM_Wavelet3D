@@ -26,7 +26,8 @@ switch type
     case "linear"
         load('D:\Code\M\Mortar_FEM_Wavelet\FEM\Data\LinearRefEleGaussOrder4.mat');
     case "quadratic"
-        load('D:\Code\M\Mortar_FEM_Wavelet\FEM\Data\QuadraticRefEleGaussOrder4.mat');
+        % load('D:\Code\M\Mortar_FEM_Wavelet\FEM\Data\QuadraticRefEleGaussOrder4.mat');
+        load('QuadraticRefEleGaussOrder4.mat')
 end
 [Jacobi_sub,Jacobi_inv_sub,y] = AffineToCuboid(pt,P_sub,T_sub,1);
 %% 组装刚度矩阵
