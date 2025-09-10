@@ -6,8 +6,8 @@ addpath(genpath(currentPath));
 ModelCoeff = 'D:\Code\M\Mortar_FEM_Wavelet\Piezoelectric\Data\ModelCoef2.mat';
 %% 数值求解
 % 求解的方程形式
-% equ_type = "saddle";
-equ_type = "schur";
+equ_type = "saddle";
+% equ_type = "schur";
 % 使用的数值方法
 % method_type="power";
 method_type="J-D";
@@ -33,7 +33,7 @@ if dimensionless==true
 end
 % 离散
 type="quadratic";
-N = 4;
+N = 8;
 Nx=N+1;Ny=N+1;Nz=N+1;
 [K,M,~,Dof_Index] =...
     AssemblePiezMatFEM(c_LN,e_LN,epcl_LN,rho,kappa_bar_sq,...
@@ -68,7 +68,7 @@ if equ_type == "saddle"
 if method_type == "power"
 [lambda_saddle,V_saddle]=inverse_iteration_GPT(K, M, 0,1E-10,1000);
 elseif method_type =="J-D"
-[lambda_saddle,V_saddle,u]=JD_iteration(K,M,1E-10,1000);
+[lambda_saddle,V_saddle]=JD_iteration_Gen(K,[],M,1E-10,200);
 end
 if dimensionless == true
     [lambda_saddle_eigs, ~, ~] = piezo_restore_dimension(lambda_saddle_eigs, V_saddle_eigs, L0, vs, Phi0);
@@ -151,46 +151,76 @@ function [lambda, v] = inverse_iteration_GPT(A, B, sigma, tol, maxit)
     warning('未收敛，最大迭代数 = %d, 最后残差 = %.2e', maxit, res);
 end
 
-function [lambda,v,u]=JD_iteration(A, B,  tol, maxit)
-if nargin < 4, maxit = 200; end
-if nargin < 3, tol = 1e-10; end
+function [lambda,vec]=JD_iteration_Gen(A,PA,B,tol, maxit)
+if ~exist('PA','var')||isempty(PA), PA=A; end
 n = size(A,1);
-
-% 初始向量
-u = randn(n,1);
-% u=ones(n,1);
-u = u / sqrt(u'*B*u);  % B-归一化
-% u = u / sqrt(u'*u);
-lambda_old = inf;
+v = randn(n,1);
+v = v/norm(v);
+w=A*v;
+w_tilde=B*v;
+vAv=v'*w; % Rayleigh商
+vBv=v'*w_tilde;
+u=v; theta = vAv/vBv;
+% r = w-theta*w_tilde;
 for k=1:maxit
-    % 计算矩阵投影
-    HA=u'*A*u;
-    HB=u'*B*u;
-    %计算小规模特征值问题
-    [y,theta]=eig(HA,HB,'vector');
-    [~, idx] = min((theta)); % 最小特征值
+    M = PA-theta*B;
+    Mu=B*u; Mu = M\Mu;
+    epcl=(u'*u)/(u'*Mu);
+    t=-u+epcl*Mu;
+    t = modifiedGramSchmidt(t, v);
+    t = t/norm(t);
+    v=[v,t];
+    w=[w,A*t];
+    vAv=v'*A*v;
+    vBv=v'*B*v;
+    % h=[h;t'*w(:,1:k)];
+    % h=[h,v'*w(:,k+1)];
+    % h(end,1:end-1)=[h;h(1:)]
+    [s,theta]=eig(vAv,vBv,'vector');
+    [~, idx] = min((theta)); % 以最小模特征值为例
     theta = theta(idx);        % 当前近似特征值
-    y = y(:, idx);
-    y=u*y; % Ritz投影
-    r=A*y-theta*B*y;
-    res = norm(r);
-    if res<tol || abs(theta-lambda_old)<tol*(1+abs(lambda_old))
-        lambda = theta;
-        v = y;
+    s = s(:, idx);
+    s = s/norm(s);
+    u=v*s;
+    uhat=w*s;
+    r=uhat-theta*B*u;
+    % r=A*u-theta*u;
+    res=norm(r);
+    if res<tol
+        lambda=theta;
+        vec=u;
         fprintf('Converged in %d iterations, residual = %.2e\n', k, res);
-        return
+        return;
     end
-    lambda_old = theta;
-    P=((y*y'*B))/(y'*B*y);
-    P = eye(size(P,1))-P;
-    Atheta=A-theta*B;
-    Atheta=P'*Atheta*P;
-    t=Atheta\(-r);
-    % t=t-(t'*B*y)/sqrt(y'*B*y)*y;
-    for i = 1:size(u,2)
-        t = t-(t'*B*u(:,i))/sqrt(u(:,i)'*B*u(:,i))*u(:,i);
-    end
-    t = t/sqrt((t'*B*t));
-    u=[u,t];
+end
+fprintf('Reached the maximum number of %d iterations, residual = %.2e\n', maxit, res);
+lambda=theta;
+vec=u;
+function t_orth = modifiedGramSchmidt(t, V)
+% 函数：modifiedGramSchmidt
+% 输入：
+%   t - 待正交化的向量（列向量）
+%   V - 标准正交基组成的矩阵（每列是一个基向量）
+% 输出：
+%   t_orth - 正交化后的向量，满足与V的每一列正交
+
+% 检查输入维度
+[m, n] = size(V);
+if size(t, 1) ~= m
+    error('向量t的维度和矩阵V的行数不一致');
+end
+if size(t, 2) ~= 1
+    error('向量t必须是列向量');
+end
+
+% 初始化正交化结果
+t_orth = t;
+
+% Modified Gram-Schmidt过程
+for j = 1:n
+    vj = V(:, j);          % 取出第j个标准正交基
+    proj_coeff = vj' * t_orth; % 计算投影系数
+    t_orth = t_orth - proj_coeff * vj; % 减去投影分量
+end
 end
 end
