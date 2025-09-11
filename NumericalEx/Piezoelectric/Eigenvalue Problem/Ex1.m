@@ -1,7 +1,7 @@
 clear
 % clc
-% currentPath = 'D:\Code\M\Mortar_FEM_Wavelet';
-currentPath = 'D:\code\Mortar_FEM_Wavelet3D';
+currentPath = 'D:\Code\M\Mortar_FEM_Wavelet';
+% currentPath = 'D:\code\Mortar_FEM_Wavelet3D';
 addpath(genpath(currentPath));
 % 材料参数
 % ModelCoeff = 'D:\Code\M\Mortar_FEM_Wavelet\Piezoelectric\Data\ModelCoef2.mat';
@@ -11,11 +11,11 @@ ModelCoeff = 'ModelCoef2.mat';
 equ_type = "saddle";
 % equ_type = "schur";
 % 使用的数值方法
-method_type="power";
-% method_type="J-D";
+% method_type="power";
+method_type="J-D";
 % 无量纲化？
-dimensionless=true;
-% dimensionless=false;
+% dimensionless=true;
+dimensionless=false;
 % 导入材料参数
 load(ModelCoeff)
 c_LN = cell2mat(materials(2));
@@ -35,7 +35,7 @@ if dimensionless==true
 end
 % 离散
 type="quadratic";
-N = 2;
+N = 4;
 Nx=N+1;Ny=N+1;Nz=N+1;
 [K,M,~,Dof_Index] =...
     AssemblePiezMatFEM(c_LN,e_LN,epcl_LN,rho,kappa_bar_sq,...
