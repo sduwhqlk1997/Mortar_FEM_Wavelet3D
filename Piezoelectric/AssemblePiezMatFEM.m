@@ -24,7 +24,8 @@ end
 %% 公共存储区
 switch type
     case "linear"
-        load('D:\Code\M\Mortar_FEM_Wavelet\FEM\Data\LinearRefEleGaussOrder4.mat');
+        % load('D:\Code\M\Mortar_FEM_Wavelet\FEM\Data\LinearRefEleGaussOrder4.mat');
+        load('LinearRefEleGaussOrder4.mat');
     case "quadratic"
         % load('D:\Code\M\Mortar_FEM_Wavelet\FEM\Data\QuadraticRefEleGaussOrder4.mat');
         load('QuadraticRefEleGaussOrder4.mat')

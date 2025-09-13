@@ -1,7 +1,7 @@
 clear
 % clc
-currentPath = 'D:\Code\M\Mortar_FEM_Wavelet';
-% currentPath = 'D:\code\Mortar_FEM_Wavelet3D';
+% currentPath = 'D:\Code\M\Mortar_FEM_Wavelet';
+currentPath = 'D:\code\Mortar_FEM_Wavelet3D';
 addpath(genpath(currentPath));
 % 材料参数
 % ModelCoeff = 'D:\Code\M\Mortar_FEM_Wavelet\Piezoelectric\Data\ModelCoef2.mat';
@@ -11,11 +11,11 @@ ModelCoeff = 'ModelCoef2.mat';
 equ_type = "saddle";
 % equ_type = "schur";
 % 使用的数值方法
-% method_type="power";
-method_type="J-D";
+method_type="power";
+% method_type="J-D";
 % 无量纲化？
-% dimensionless=true;
-dimensionless=false;
+dimensionless=true;
+% dimensionless=false;
 % 导入材料参数
 load(ModelCoeff)
 c_LN = cell2mat(materials(2));
@@ -121,8 +121,8 @@ function [lambda, v] = inverse_iteration_GPT(A, B, sigma, tol, maxit)
     % 初始向量
     % v = randn(n,1);
     v=ones(n,1);
-    v = v / sqrt(v'*B*v);  % B-归一化
-    % v = v / sqrt(v'*v);
+    % v = v / sqrt(v'*B*v);  % B-归一化
+    v = v / sqrt(v'*v);
 
     % 因式分解 A - sigma B
     [L,U,P,Q] = lu(A - sigma*B);
@@ -135,7 +135,9 @@ function [lambda, v] = inverse_iteration_GPT(A, B, sigma, tol, maxit)
         
         % 2) B-单位化
         % lambda=max(w);
-        v=w/max(abs(w));
+        % v=w/max(abs(w));
+        % v=w/sqrt(w'*B*w);
+        v=w/sqrt(w'*w);
         % v = w / sqrt(v' * B * w);
         % v = w / sqrt(v' * w);
 
